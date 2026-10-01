@@ -234,7 +234,7 @@ export function allRowsOf(files: readonly FileDiff[], comments: readonly Comment
 
 export const RAIL_COLUMNS = 4
 
-export const badgeTextOf = (b: FileRisk): string => (b.level === 'low' ? 'low' : `⚠ ${b.level}`)
+export const badgeTextOf = (b: FileRisk): string => (b.level === 'low' ? 'low' : `! ${b.level}`)
 
 export const innerWidthOf = (columns: number) => Math.max(10, columns - RAIL_COLUMNS)
 

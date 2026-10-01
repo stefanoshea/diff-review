@@ -564,7 +564,7 @@ describe('register', () => {
     expect(tree).toContain('risk high')
     expect(tree).toContain('needs judgment: security, tests')
     expect(tree).toContain('Accept the shorter token lifetime?')
-    expect(tree).toContain('⚠ high')
+    expect(tree).toContain('! high')
     expect(tree).not.toContain('l:src/app.ts:RIGHT:2')
     await $.ui.press({ plugin: 'diff-review', key: 'files' })
     const listed = JSON.stringify(await $.ui.render(PANE))

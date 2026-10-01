@@ -95,7 +95,7 @@ Header, always visible: title, `branch → base @sha · n open`, and buttons `re
 Body:
 
 - The risk card, once an analysis has run. Coloured by level. It holds the summary, `needs judgment: …`, and `decisions for you` bullets. `[hide]` hides it; the `risk` button shows it again or runs a new analysis. It says `(stale: diff changed)` when the PR head moved since the analysis.
-- One card per file, in risk order: high, unrated, low. The header carries the status, path, `+added -removed`, `●n` for open comments, and a risk badge `⚠ high`, `⚠ medium`, or `low`. Low-risk files start collapsed. Press a header to collapse or expand it.
+- One card per file, in risk order: high, unrated, low. The header carries the status, path, `+added -removed`, `●n` for open comments, and a risk badge `! high`, `! medium`, or `low`. Low-risk files start collapsed. Press a header to collapse or expand it.
 - One row per diff line with a gutter button carrying the line number. `●` marks lines with comments.
 - Comments in rounded boxes under their line: cyan for yours, magenta for Claude's, dim once sent. Each open comment has `edit` and `delete`.
 
