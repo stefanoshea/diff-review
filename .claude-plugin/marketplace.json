@@ -1,0 +1,12 @@
+{
+  "name": "diff-review",
+  "owner": { "name": "Stefan O'Shea" },
+  "description": "Marketplace for the diff-review mod: pull-request review inside Claude Code.",
+  "plugins": [
+    {
+      "name": "diff-review",
+      "source": "./",
+      "description": "Code review inside Claude Code: PR diff in a pane, draft comments from you or Claude, sent as a pending GitHub review."
+    }
+  ]
+}

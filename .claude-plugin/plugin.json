@@ -1,0 +1,23 @@
+{
+  "name": "diff-review",
+  "version": "0.1.0",
+  "description": "Code review inside Claude Code: the branch diff in a pane, draft comments from you or Claude on any line, sent as a pending GitHub pull-request review. Needs Claude Code 2.1.287 or later, git and gh.",
+  "author": {
+    "name": "Stefan O'Shea"
+  },
+  "license": "MIT",
+  "keywords": [
+    "review",
+    "diff",
+    "github",
+    "pull-request"
+  ],
+  "userConfig": {
+    "reviewSkill": {
+      "type": "string",
+      "description": "Slash command that [claude review] runs first, for example /code-review low or /my-review. In PR mode the PR number is appended.",
+      "default": "/code-review low",
+      "title": "Review skill"
+    }
+  }
+}

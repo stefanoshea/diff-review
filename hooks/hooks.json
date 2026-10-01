@@ -1,0 +1,4 @@
+{
+  "description": "diff-review: /diff-review pane with draft comments, sent as a pending GitHub review.",
+  "modules": ["./register.tsx"]
+}
