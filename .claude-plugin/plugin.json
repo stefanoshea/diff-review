@@ -1,10 +1,12 @@
 {
   "name": "diff-review",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Code review inside Claude Code: the branch diff in a pane, draft comments from you or Claude on any line, sent as a pending GitHub pull-request review. Needs Claude Code 2.1.287 or later, git and gh.",
   "author": {
     "name": "Stefan O'Shea"
   },
+  "homepage": "https://github.com/stefanoshea/diff-review",
+  "repository": "https://github.com/stefanoshea/diff-review",
   "license": "MIT",
   "keywords": [
     "review",

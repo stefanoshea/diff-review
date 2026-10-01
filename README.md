@@ -38,13 +38,68 @@ In a Claude Code session:
 /reload-plugins
 ```
 
-A mod runs with your permissions. Read the code first: `claude plugin validate` on a clone lists every event it hooks and every call it makes.
+A mod runs with your permissions. [What the mod runs, reads and sends](#what-the-mod-runs-reads-and-sends) lists every program, request, prompt and command, and `claude plugin validate` on a clone lists every event it hooks and every call it makes.
 
 To run it from a local clone instead:
 
 ```
 claude --plugin-dir /path/to/diff-review
 ```
+
+## What the mod runs, reads and sends
+
+Every call below is in `hooks/`. `claude plugin validate .` on a clone lists the same hooks and calls.
+
+### Programs it starts
+
+The mod starts two programs, `git` and `gh`, through `$.process.run`, which takes an argument list and uses no shell. Each command is fixed words plus the branch, commit, pull request number, repository or file paths of the review. The mod starts no other program.
+
+`git`, always with `--no-optional-locks`, reads the repository you run Claude Code in:
+
+- `rev-parse --show-toplevel`, `rev-parse --abbrev-ref HEAD`, `rev-parse HEAD`, `rev-parse origin/<branch>`: find the repository, the branch and the head commit. In branch mode, `rev-parse HEAD` also runs every 5 seconds while the pane is open, to notice new commits.
+- `symbolic-ref --quiet refs/remotes/origin/HEAD`, `rev-parse --verify --quiet origin/main` (or `origin/master`): find the default base branch.
+- `merge-base <base> HEAD`: find where the branch started.
+- `diff --no-color -U3 --find-renames <merge-base> [<pull request head>]`: the diff in the pane.
+- `diff --name-only HEAD -- <commented paths>`: before a branch-mode send, check that the commented files have no uncommitted changes.
+- `remote -v`: find the remote that matches the pull request's repository.
+- `fetch --quiet <remote> +pull/<n>/head:refs/remotes/diff-review/pr-<n>` and `fetch --quiet <remote> <base branch>`: in PR mode, download the pull request's commits. The only thing this writes is the `refs/remotes/diff-review/pr-<n>` ref. Your branch and working tree stay untouched.
+
+`gh` talks to GitHub as the account `gh` is logged in with:
+
+- `gh pr view [<n>] [--repo <owner>/<repo>] --json ...` and `gh repo view --json nameWithOwner`: read the pull request's number, branches, head commit and URL.
+- `gh api repos/<owner>/<repo>/pulls/<n> -H "Accept: application/vnd.github.v3.diff"`: read the diff of a pull request in another repository than the one you are in.
+- `gh api -X POST repos/<owner>/<repo>/pulls/<n>/reviews --input -`: only when you send, see below.
+
+### What it sends, and where
+
+- **To GitHub, only when you run `/diff-review send` or press `send review`:** one pending review on that pull request. It holds the head commit SHA and, for each open comment, the file path, the line or line range, the side and the comment text. The review stays pending until you submit it on GitHub.
+- **To GitHub, as reads:** the `gh` and `git fetch` calls above send only the repository, the pull request number and the refs they ask for.
+- **To Claude:** the mod's tools `get_diff` and `list_comments` give Claude the diff and the open comments when Claude calls them, and the prompts below go to Claude as user turns. This is the conversation you already have in Claude Code; the mod adds no other service.
+- **Nothing else.** The mod makes no network calls of its own (it never calls `$.http`) and sends no telemetry.
+
+What it reads: the git repository above; its own stored comments, risk analysis and feedback memory in Claude Code's plugin store (`$.store`); and the names of the tools Claude calls. When `Edit`, `Write`, `NotebookEdit` or `Bash` finishes, it refreshes the diff. It does not read the input or the output of those tools.
+
+### Prompts it submits
+
+The mod submits a prompt only when you ask for one:
+
+- **`[risk]`, `/diff-review risk`, or the first step of `claude review`:** instructions to read the diff with `get_diff` and call `set_risk` once, the pull request number or URL, and the feedback memory block. That block holds your notes, the path and text of Claude drafts you deleted or rewrote in this repository, and how many Claude drafts you sent.
+- **The last step of `claude review`:** instructions to turn the review's findings into `add_comment` calls, plus the same feedback memory block.
+- **`[ask]` in a comment box:** the branch or pull request, the file path and line range, the selected diff lines with a few lines around them, and your question.
+
+The full text is in `hooks/tools.ts` (`riskPromptOf`, `reviewPlanOf`) and `hooks/view/ask-text.ts` (`askTextOf`).
+
+### Slash commands it runs
+
+`claude review` (`/diff-review claude`, or the `claude review` button) runs one slash command: the review skill set in `/config` under "Review skill", default `/code-review low`. In PR mode the pull request number or URL is appended. It runs after Claude's risk-analysis turn ends. The mod runs no other slash command.
+
+### Hooks that answer an event
+
+- **`command.run` on `{ command: "diff-review" }`:** answers `/diff-review`, the mod's own command. It never sees or changes any other command.
+- **`tool.call` on `mcp__diff-review__add_comment`, `list_comments`, `get_diff` and `set_risk`:** answers the four tools the mod registers. A refusal there, such as "the pane is not open", is that tool's result, not a permission decision.
+- **`tool.call` on `Edit`, `Write`, `NotebookEdit` and `Bash`:** passes the call on unchanged with `next(e)`, then schedules a diff refresh.
+
+The mod never approves or denies a tool call. It never changes a permission mode, a setting or Remote Control, never spawns an agent, and never writes files through Claude Code.
 
 ## Run it
 
