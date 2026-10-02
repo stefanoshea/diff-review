@@ -45,13 +45,13 @@ describe('pr-switch', () => {
     expect(tree).toContain('src/app.ts')
   })
 
-  test('unknown arguments are echoed back instead of silently opening', async ($, on) => {
+  test('unknown input is echoed back instead of silently opening', async ($, on) => {
     const w = world(on, { ...REMOTE_PR, ...IN_PR })
     await $.session.start(SESSION)
     const { text } = await $.command.run(review('42'))
     await w.clock.settle()
     expect(text).toContain('PR #42')
     const bad = await $.command.run(review('frobnicate'))
-    expect(bad.text).toContain('unknown arguments "frobnicate"')
+    expect(bad.text).toContain('unknown input "frobnicate"')
   })
 })

@@ -1,3 +1,4 @@
+import type { CommandRunInput } from 'claude-code'
 import { describe, expect, mock, test, tier } from 'claude-code/testing'
 import { ALL } from './fixtures/diffs.ts'
 import { IN_PR, NO_PR, REMOTE_PR } from './fixtures/git-script.ts'
@@ -20,6 +21,20 @@ describe('register', () => {
     await $.session.start(SESSION)
     expect(commands).toEqual(['diff-review'])
     expect(tools).toEqual(['add_comment', 'list_comments', 'set_risk', 'get_diff'])
+  })
+
+  test('/diff-review passes its own event on unchanged, then answers with its text', async ($, on) => {
+    const passed: CommandRunInput[] = []
+    mock.clock(on)
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('command.register', ($, e) => ({ value: { command: e.name } }))
+    on('tool.register', ($, e) => ({ value: { tool: `mcp__diff-review__${e.name}` } }))
+    on('command.run', ($, e) => { passed.push(e); return { context: ['core note'] } })
+    await $.session.start(SESSION)
+    const answer = await $.command.run(review('frobnicate'))
+    expect(passed).toEqual([review('frobnicate')])
+    expect(answer.text).toContain('unknown input "frobnicate"')
+    expect(answer.context).toEqual(['core note'])
   })
 
   test('/diff-review opens the pane, resolves the target and fetches the diff', async ($, on) => {

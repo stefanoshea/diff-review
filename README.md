@@ -75,13 +75,13 @@ The mod starts two programs, `git` and `gh`, through `$.process.run`, which take
 - **To GitHub, only when you run `/diff-review send` or press `send review`:** one pending review on that pull request. It holds the head commit SHA and, for each open comment, the file path, the line or line range, the side and the comment text. The review stays pending until you submit it on GitHub.
 - **To GitHub, as reads:** the `gh` and `git fetch` calls above send only the repository, the pull request number and the refs they ask for.
 - **To Claude:** the mod's tools `get_diff` and `list_comments` give Claude the diff and the open comments when Claude calls them, and the prompts below go to Claude as user turns. This is the conversation you already have in Claude Code; the mod adds no other service.
-- **Nothing else.** The mod makes no network calls of its own (it never calls `$.http`) and sends no telemetry.
+- **Nothing else.** The mod makes no network calls of its own (it never calls `$.http`) and sends no telemetry. Data leaves the mod in two ways only: the `git` and `gh` arguments listed above (`$.process.run`), and the prompts listed below (`$.prompt.submit`). Nothing the mod reads from the session goes into either.
 
 What it reads: the git repository above; its own stored comments, risk analysis and feedback memory in Claude Code's plugin store (`$.store`); and the names of the tools Claude calls. When `Edit`, `Write`, `NotebookEdit` or `Bash` finishes, it refreshes the diff. It does not read the input or the output of those tools.
 
 It also reads two facts about the session, and sends neither out:
 
-- **The session id (`$.session.id`):** stored in the plugin store with the open-pane marker, and compared at session start so that a resumed session reopens its pane. It is never put in a prompt, a `git` or `gh` argument, or the review.
+- **The session id (`$.session.id`):** stored in the plugin store with the open-pane marker, and compared at session start so that a resumed session reopens its pane. It is never put in a prompt, a `git` or `gh` argument, or the review. The mod reads it because `session.start` does not say whether a session is new or resumed.
 - **Turn events (`turn.start`, `turn.complete`):** only the turn id, the agent id and the reason the turn ended, so that `claude review` starts its next step when Claude's turn ends. The mod never reads the text of the conversation.
 
 ### Prompts it submits
@@ -100,7 +100,7 @@ The full text is in `hooks/tools.ts` (`riskPromptOf`, `reviewPlanOf`) and `hooks
 
 ### Hooks that answer an event
 
-- **`command.run` on `{ command: "diff-review" }`:** answers `/diff-review`, the mod's own command. It never sees or changes any other command.
+- **`command.run` on `{ command: "diff-review" }`:** answers `/diff-review`, the mod's own command. It passes the event on unchanged with `next(e)`, then adds its own text as the command's output. It never sees or changes any other command.
 - **`tool.call` on `mcp__diff-review__add_comment`, `list_comments`, `get_diff` and `set_risk`:** answers the four tools the mod registers. A refusal there, such as "the pane is not open", is that tool's result, not a permission decision.
 - **`tool.call` on `Edit`, `Write`, `NotebookEdit` and `Bash`:** passes the call on unchanged with `next(e)`, then schedules a diff refresh.
 

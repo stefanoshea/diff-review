@@ -187,14 +187,14 @@ const stepComment = (state: State, $: EngineInterface, delta: 1 | -1) => {
   }
   const at = state.cursorCommentId === null ? -1 : order.findIndex(s => s.id === state.cursorCommentId)
   const from = at >= 0 ? at : entryPointOf(order, state.cursorPath, delta)
-  const next = (from + delta + order.length) % order.length
-  const stop = order[next]
+  const to = (from + delta + order.length) % order.length
+  const stop = order[to]
   if (stop === undefined) return
-  const wrapped = at >= 0 && (delta === 1 ? next < at : next > at)
+  const wrapped = at >= 0 && (delta === 1 ? to < at : to > at)
   state.cursorCommentId = stop.id
   state.cursorPath = stop.path
   if (state.model.collapsed.includes(stop.path)) state.model.collapsed = state.model.collapsed.filter(p => p !== stop.path)
-  state.model.footer = `comment ${next + 1} of ${order.length}${wrapped ? ' (wrapped)' : ''}`
+  state.model.footer = `comment ${to + 1} of ${order.length}${wrapped ? ' (wrapped)' : ''}`
   const layout = layoutOf(state, state.columns)
   state.contentRows = layout.total
   redraw(state, $)
@@ -295,9 +295,9 @@ const applyRisk = async (state: State, $: EngineInterface, risk: Risk) => {
 
 const scrollBy = (state: State, $: EngineInterface, by: number) => {
   const layout = layoutOf(state, state.columns)
-  const next = snapOffset(layout.tops, layout.total, state.bodyCount, state.scrollTop, by)
-  if (next === state.scrollTop) return
-  state.scrollTop = next
+  const to = snapOffset(layout.tops, layout.total, state.bodyCount, state.scrollTop, by)
+  if (to === state.scrollTop) return
+  state.scrollTop = to
   redraw(state, $)
 }
 
@@ -345,10 +345,10 @@ const statusText = (state: State) => {
   return `review: ${t.branch} → ${t.base}${t.pr ? ` (PR #${t.pr.number})` : ''}, ${state.model.files.length} file(s), ${state.store?.open().length ?? 0} open comment(s)`
 }
 
-const addressOfDraft = (files: readonly FileDiff[], e: Editing): { path: string; side: Side; line: number; startLine?: number } => {
-  const end = e.endLine ?? e.line
-  if (end === e.line || !inOneHunk(files, e.path, e.side, e.line, end)) return { path: e.path, side: e.side, line: e.line }
-  return { path: e.path, side: e.side, line: Math.max(e.line, end), startLine: Math.min(e.line, end) }
+const addressOfDraft = (files: readonly FileDiff[], editing: Editing): { path: string; side: Side; line: number; startLine?: number } => {
+  const end = editing.endLine ?? editing.line
+  if (end === editing.line || !inOneHunk(files, editing.path, editing.side, editing.line, end)) return { path: editing.path, side: editing.side, line: editing.line }
+  return { path: editing.path, side: editing.side, line: Math.max(editing.line, end), startLine: Math.min(editing.line, end) }
 }
 
 const actionsOf = (state: State, $: EngineInterface): Actions => ({
@@ -376,9 +376,9 @@ const actionsOf = (state: State, $: EngineInterface): Actions => ({
   commentDown: () => stepComment(state, $, 1),
   expandAll: () => { if (state.model.collapsed.length) state.model.collapsed = []; redraw(state, $) },
   startComment: (path, side, line) => {
-    const e = state.model.editing
-    if (e && e.path === path && e.side === side && e.endLine === null && line !== e.line) {
-      e.endLine = line
+    const editing = state.model.editing
+    if (editing && editing.path === path && editing.side === side && editing.endLine === null && line !== editing.line) {
+      editing.endLine = line
       redraw(state, $)
       return
     }
@@ -396,29 +396,29 @@ const actionsOf = (state: State, $: EngineInterface): Actions => ({
     void state.store?.remove(id).then(() => redraw(state, $)).catch(onFail(state, $))
   },
   submitDraft: value => {
-    const e = state.model.editing
+    const editing = state.model.editing
     const body = value.trim()
     state.model.editing = null
-    if (!e || !state.store || !body) { redraw(state, $); return }
-    const prior = e.commentId ? state.store.all().find(x => x.id === e.commentId) : undefined
+    if (!editing || !state.store || !body) { redraw(state, $); return }
+    const prior = editing.commentId ? state.store.all().find(x => x.id === editing.commentId) : undefined
     if (prior && prior.author === 'claude' && prior.body !== body) {
       void state.memory?.record({ kind: 'corrected', path: prior.path, body: prior.body, newBody: body }).catch(onFail(state, $))
     }
-    const done = e.commentId ? state.store.edit(e.commentId, body) : state.store.add({ ...addressOfDraft(state.model.files, e), body, author: 'user' })
+    const done = editing.commentId ? state.store.edit(editing.commentId, body) : state.store.add({ ...addressOfDraft(state.model.files, editing), body, author: 'user' })
     void Promise.resolve(done).then(() => redraw(state, $)).catch(onFail(state, $))
   },
   updateDraft: value => { if (state.model.editing) state.model.editing.draft = value },
   saveDraft: () => actionsOf(state, $).submitDraft(state.model.editing?.draft ?? ''),
   ask: () => {
-    const e = state.model.editing
-    if (!e || !state.model.target) return
-    const file = fileOf(state.model.files, e.path)
-    const from = Math.min(e.line, e.endLine ?? e.line)
-    const to = Math.max(e.line, e.endLine ?? e.line)
-    const sel: AskSelection = { path: e.path, side: e.side, from, to }
-    const text = file ? askTextOf(state.model.target, file, sel, e.draft) : e.draft
+    const editing = state.model.editing
+    if (!editing || !state.model.target) return
+    const file = fileOf(state.model.files, editing.path)
+    const from = Math.min(editing.line, editing.endLine ?? editing.line)
+    const to = Math.max(editing.line, editing.endLine ?? editing.line)
+    const sel: AskSelection = { path: editing.path, side: editing.side, from, to }
+    const text = file ? askTextOf(state.model.target, file, sel, editing.draft) : editing.draft
     state.model.editing = null
-    state.model.footer = `asked Claude about ${e.path}:${from}-${to}`
+    state.model.footer = `asked Claude about ${editing.path}:${from}-${to}`
     redraw(state, $)
     void $.prompt.submit({ text }).catch(onFail(state, $))
   },
@@ -434,6 +434,80 @@ const actionsOf = (state: State, $: EngineInterface): Actions => ({
     })().catch(onFail(state, $))
   },
 })
+
+const answerCommand = async (state: State, $: EngineInterface, args: string | undefined): Promise<string> => {
+  const raw = (args ?? '').trim()
+  const { verb, rest } = parseArgs(raw)
+  switch (verb) {
+    case 'unknown':
+      return `review: unknown input "${raw}" (use: pr <number|url>, claude, risk, note <text>, memory [clear], branch, close, refresh, send, clear, base <ref>)`
+    case 'close':
+      await closePane(state, $)
+      return 'review: pane closed'
+    case 'refresh':
+      if (state.isOpen) await refresh(state, $); else await openPane(state, $)
+      return statusText(state)
+    case 'send':
+      if (!state.isOpen) await openPane(state, $)
+      return sendReview(state, $)
+    case 'claude':
+      if (!state.isOpen) await openPane(state, $)
+      startClaudeReview(state, $)
+      return `review: asked Claude for a risk analysis, then a review with ${state.reviewSkill} and draft comments`
+    case 'risk':
+      if (!state.isOpen) await openPane(state, $)
+      startRiskAnalysis(state, $)
+      return 'review: asked Claude for a risk analysis'
+    case 'clear':
+      await state.store?.clear()
+      redraw(state, $)
+      return 'review: comments cleared'
+    case 'note': {
+      const text = rest.join(' ').trim()
+      if (!text) return 'review: usage: /diff-review note <what Claude should remember about your reviews>'
+      if (!state.isOpen) await openPane(state, $)
+      if (!state.memory) return 'review: cannot read the repository, so nothing was noted'
+      await state.memory.record({ kind: 'note', body: text })
+      return `review: noted (${state.memory.countOf('note')} notes)`
+    }
+    case 'memory': {
+      if (!state.isOpen) await openPane(state, $)
+      if (rest[0]?.toLowerCase() === 'clear') {
+        await state.memory?.clear()
+        return 'review: feedback memory cleared'
+      }
+      return state.memory?.promptText(8000) || 'review: no feedback memory yet for this repository'
+    }
+    case 'pr': {
+      const ref = prRefOf(rest.join(' '))
+      if (ref === null) return 'review: usage: /diff-review pr <number|url|owner/repo#number>'
+      const n = ref.number
+      state.prNumber = n
+      state.prRepo = ref.nameWithOwner || null
+      state.model.footer = ref.nameWithOwner ? `loading ${ref.nameWithOwner}#${n}` : `loading PR #${n}`
+      state.scrollTop = 0
+      if (!state.isOpen) await openPane(state, $); else await refresh(state, $)
+      return statusText(state)
+    }
+    case 'branch':
+      state.prNumber = null
+      state.prRepo = null
+      await refresh(state, $)
+      return statusText(state)
+    case 'base': {
+      if (state.prNumber !== null) return 'review: base override applies to branch mode only'
+      if (!state.model.target) await openPane(state, $)
+      if (state.model.target) {
+        await $.store.set(baseKey(state.model.target.toplevel, state.model.target.branch), rest.join(' '))
+        await refresh(state, $)
+      }
+      return statusText(state)
+    }
+    default:
+      await openPane(state, $)
+      return statusText(state)
+  }
+}
 
 export const register: Register = (on, options) => {
   const state = newState()
@@ -502,78 +576,9 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  on('command.run', { command: 'diff-review' }, async ($, e) => {
-    const raw = (e.args ?? '').trim()
-    const { verb, rest } = parseArgs(raw)
-    if (verb === 'unknown') return { text: `review: unknown arguments "${raw}" (use: pr <number|url>, claude, risk, note <text>, memory [clear], branch, close, refresh, send, clear, base <ref>)` }
-    switch (verb) {
-      case 'close':
-        await closePane(state, $)
-        return { text: 'review: pane closed' }
-      case 'refresh':
-        if (state.isOpen) await refresh(state, $); else await openPane(state, $)
-        return { text: statusText(state) }
-      case 'send':
-        if (!state.isOpen) await openPane(state, $)
-        return { text: await sendReview(state, $) }
-      case 'claude':
-        if (!state.isOpen) await openPane(state, $)
-        startClaudeReview(state, $)
-        return { text: `review: asked Claude for a risk analysis, then a review with ${state.reviewSkill} and draft comments` }
-      case 'risk':
-        if (!state.isOpen) await openPane(state, $)
-        startRiskAnalysis(state, $)
-        return { text: 'review: asked Claude for a risk analysis' }
-      case 'clear':
-        await state.store?.clear()
-        redraw(state, $)
-        return { text: 'review: comments cleared' }
-      case 'note': {
-        const text = rest.join(' ').trim()
-        if (!text) return { text: 'review: usage: /diff-review note <what Claude should remember about your reviews>' }
-        if (!state.isOpen) await openPane(state, $)
-        if (!state.memory) return { text: 'review: cannot read the repository, so nothing was noted' }
-        await state.memory.record({ kind: 'note', body: text })
-        return { text: `review: noted (${state.memory.countOf('note')} notes)` }
-      }
-      case 'memory': {
-        if (!state.isOpen) await openPane(state, $)
-        if (rest[0]?.toLowerCase() === 'clear') {
-          await state.memory?.clear()
-          return { text: 'review: feedback memory cleared' }
-        }
-        const text = state.memory?.promptText(8000) ?? ''
-        return { text: text || 'review: no feedback memory yet for this repository' }
-      }
-      case 'pr': {
-        const ref = prRefOf(rest.join(' '))
-        if (ref === null) return { text: 'review: usage: /diff-review pr <number|url|owner/repo#number>' }
-        const n = ref.number
-        state.prNumber = n
-        state.prRepo = ref.nameWithOwner || null
-        state.model.footer = ref.nameWithOwner ? `loading ${ref.nameWithOwner}#${n}` : `loading PR #${n}`
-        state.scrollTop = 0
-        if (!state.isOpen) await openPane(state, $); else await refresh(state, $)
-        return { text: statusText(state) }
-      }
-      case 'branch':
-        state.prNumber = null
-        state.prRepo = null
-        await refresh(state, $)
-        return { text: statusText(state) }
-      case 'base': {
-        if (state.prNumber !== null) return { text: 'review: base override applies to branch mode only' }
-        if (!state.model.target) await openPane(state, $)
-        if (state.model.target) {
-          await $.store.set(baseKey(state.model.target.toplevel, state.model.target.branch), rest.join(' '))
-          await refresh(state, $)
-        }
-        return { text: statusText(state) }
-      }
-      default:
-        await openPane(state, $)
-        return { text: statusText(state) }
-    }
+  on('command.run', { command: 'diff-review' }, async ($, e, next) => {
+    const passed = await next(e)
+    return { ...passed, text: await answerCommand(state, $, e.args) }
   })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
