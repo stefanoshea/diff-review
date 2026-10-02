@@ -79,6 +79,11 @@ The mod starts two programs, `git` and `gh`, through `$.process.run`, which take
 
 What it reads: the git repository above; its own stored comments, risk analysis and feedback memory in Claude Code's plugin store (`$.store`); and the names of the tools Claude calls. When `Edit`, `Write`, `NotebookEdit` or `Bash` finishes, it refreshes the diff. It does not read the input or the output of those tools.
 
+It also reads two facts about the session, and sends neither out:
+
+- **The session id (`$.session.id`):** stored in the plugin store with the open-pane marker, and compared at session start so that a resumed session reopens its pane. It is never put in a prompt, a `git` or `gh` argument, or the review.
+- **Turn events (`turn.start`, `turn.complete`):** only the turn id, the agent id and the reason the turn ended, so that `claude review` starts its next step when Claude's turn ends. The mod never reads the text of the conversation.
+
 ### Prompts it submits
 
 The mod submits a prompt only when you ask for one:
@@ -135,7 +140,7 @@ Open the pull request on GitHub and submit the pending review.
 | `/diff-review base <ref>` | Branch mode only: diff against this ref instead of the detected base. |
 | `/diff-review close` | Close the pane. |
 
-The pane reopens by itself on the next session in the same repository until you close it.
+The pane reopens by itself when you resume the session, until you close it. A new session starts with the pane closed.
 
 ### A PR in another repository
 

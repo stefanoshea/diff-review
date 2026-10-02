@@ -10,7 +10,7 @@ import { runnerOf, type Runner } from './git/run.ts'
 import { uncommittedOf } from './git/uncommitted.ts'
 import { MemoryStore } from './memory/store.ts'
 import { prNumberOf, prRefOf, resolvePrTarget, resolveTarget, type Target, type TargetFailure } from './git/target.ts'
-import { Names, toolName } from './names.ts'
+import { Names } from './names.ts'
 import { DEFAULT_REVIEW_SKILL, reviewPlanOf, riskPromptOf, serveAddComment, serveGetDiff, serveListComments, serveSetRisk } from './tools.ts'
 import { askTextOf, type AskSelection } from './view/ask-text.ts'
 import { newModel, type Editing, type Model, type Risk } from './view/model.ts'
@@ -442,12 +442,12 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     await $.command.register({
-      name: Names.COMMAND,
+      name: 'diff-review',
       description: 'Review the branch diff with draft comments; send them as a pending GitHub review',
       argumentHint: '[pr <number|url>|claude|risk|note <text>|memory [clear]|branch|close|refresh|send|clear|base <ref>]',
     })
     await $.tool.register({
-      name: Names.TOOL_ADD,
+      name: 'add_comment',
       description: 'Add a draft review comment on a line of the diff shown in the /diff-review pane. Drafts are triaged by the user before the review is sent. side RIGHT uses new-file line numbers (added or unchanged lines); LEFT uses old-file numbers (removed lines). One finding per call. Refused when the pane is closed or the line is not on the diff.',
       inputSchema: { type: 'object', required: ['path', 'line', 'body'], properties: {
         path: { type: 'string', description: 'Repository-relative path as shown in the review pane' },
@@ -457,12 +457,12 @@ export const register: Register = (on, options) => {
       } },
     })
     await $.tool.register({
-      name: Names.TOOL_LIST,
+      name: 'list_comments',
       description: 'List the open draft review comments in the /diff-review pane, grouped by file.',
       inputSchema: { type: 'object', properties: {} },
     })
     await $.tool.register({
-      name: Names.TOOL_RISK,
+      name: 'set_risk',
       description: 'Record the risk analysis of the diff shown in the /diff-review pane: overall level, summary, review dimensions that need human judgment, decisions for the reviewer, and a level per file. Low-risk files collapse in the pane; files sort by risk. Call once per analysis; a new call replaces the old one.',
       inputSchema: { type: 'object', required: ['level', 'summary', 'files'], properties: {
         level: { type: 'string', enum: ['low', 'medium', 'high'] },
@@ -477,7 +477,7 @@ export const register: Register = (on, options) => {
       } },
     })
     await $.tool.register({
-      name: Names.TOOL_DIFF,
+      name: 'get_diff',
       description: 'Read the diff shown in the /diff-review pane, with R<n>/L<n> line numbers that add_comment accepts. Optional path returns one file in full.',
       inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'Repository-relative path; omit for the whole diff' } } },
     })
@@ -502,7 +502,7 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  on('command.run', { command: Names.COMMAND }, async ($, e) => {
+  on('command.run', { command: 'diff-review' }, async ($, e) => {
     const raw = (e.args ?? '').trim()
     const { verb, rest } = parseArgs(raw)
     if (verb === 'unknown') return { text: `review: unknown arguments "${raw}" (use: pr <number|url>, claude, risk, note <text>, memory [clear], branch, close, refresh, send, clear, base <ref>)` }
@@ -583,18 +583,18 @@ export const register: Register = (on, options) => {
     return paneTree({ Box, Text, Button, Input }, state.model, state.store?.all() ?? [], layout, actionsOf(state, $), e.props.bodyColumns, { path: state.cursorPath, commentId: state.cursorCommentId }, { offset: state.scrollTop, bodyRows: e.props.scroll.bodyRows }, (w, bodyCount) => { state.bodyCount = bodyCount; state.contentRows = w.total; state.columns = e.props.bodyColumns })
   })
 
-  on('ui.close', { id: Names.PANE_ID }, async ($, e, next) => {
+  on('ui.close', { id: 'diff-review' }, async ($, e, next) => {
     await clearOpenState(state, $)
     state.model.editing = null
     return next(e)
   })
 
-  on('ui.scroll', { requestId: Names.PANE_ID }, async ($, e) => {
+  on('ui.scroll', { requestId: 'diff-review' }, async ($, e) => {
     scrollBy(state, $, e.by)
     return {}
   })
 
-  on('ui.focus', { plugin: Names.PLUGIN }, async ($, e, next) => {
+  on('ui.focus', { plugin: 'diff-review' }, async ($, e, next) => {
     if (e.element?.startsWith('h:')) { state.cursorPath = e.element.slice(2); state.cursorCommentId = null }
     if (e.element?.startsWith('e:') || e.element?.startsWith('d:')) state.cursorCommentId = e.element.slice(2)
     if (e.element) revealKey(state, $, e.element)
@@ -630,24 +630,24 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  on('tool.call', { tool: toolName(Names.TOOL_ADD) }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__diff-review__add_comment' }, async ($, e) => {
     const a = await serveAddComment(e as unknown as Record<string, unknown>, { store: state.store, files: state.model.files, isOpen: state.isOpen })
     if (a.ok) redraw(state, $)
     return a.ok ? { result: a.text } : { deny: a.text }
   })
 
-  on('tool.call', { tool: toolName(Names.TOOL_RISK) }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__diff-review__set_risk' }, async ($, e) => {
     const a = serveSetRisk(e as unknown as Record<string, unknown>, { store: state.store, files: state.model.files, isOpen: state.isOpen, headSha: state.model.target?.headSha })
     if (a.ok && a.risk) await applyRisk(state, $, a.risk)
     return a.ok ? { result: a.text } : { deny: a.text }
   })
 
-  on('tool.call', { tool: toolName(Names.TOOL_DIFF) }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__diff-review__get_diff' }, async ($, e) => {
     const a = serveGetDiff(e as unknown as Record<string, unknown>, { store: state.store, files: state.model.files, isOpen: state.isOpen, isDiffTruncated: state.model.isDiffTruncated })
     return a.ok ? { result: a.text } : { deny: a.text }
   })
 
-  on('tool.call', { tool: toolName(Names.TOOL_LIST) }, async () => {
+  on('tool.call', { tool: 'mcp__diff-review__list_comments' }, async () => {
     const a = serveListComments({ store: state.store, files: state.model.files, isOpen: state.isOpen })
     return a.ok ? { result: a.text } : { deny: a.text }
   })
